@@ -1,0 +1,13 @@
+{
+    "type": "code",
+    "modid": "bulkux",
+    "name": "bulkux",
+    "authors": [
+        "DizzyD"
+    ],
+    "description": "UX Tweaks for easier bulk operations",
+    "version": "1.0.0",
+    "dependencies": {
+        "game": "1.20.4"
+    }
+}
