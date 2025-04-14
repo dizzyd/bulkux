@@ -16,13 +16,31 @@ namespace bulkux;
 public class bulkuxModSystem : ModSystem
 {
     Harmony harmony;
-    public static ICoreAPI api;
+    private static ICoreAPI api;
+
+    private static WorldInteraction[] _newCrateInteractions = new WorldInteraction[]
+    {
+        new WorldInteraction()
+        {
+            ActionLangCode = "bulkux:blockhelp-bulkux-get",
+            MouseButton = EnumMouseButton.Right,
+            HotKeyCodes = null
+        },
+        new WorldInteraction()
+        {
+            ActionLangCode = "bulkux:blockhelp-bulkux-put",
+            MouseButton = EnumMouseButton.Right,
+            HotKeyCode = "shift"
+        }
+    };
+    
+    private static List<WorldInteraction> _crateInteractionsBuffer = new List<WorldInteraction>();
     
     public override void Start(ICoreAPI api)
     {
         base.Start(api);
         
-        // Pass API pointer into our patch classes
+        // Save the API pointer
         bulkuxModSystem.api = api;
         
         // If no patches have been applied, apply them. This check is necessary as the
@@ -36,7 +54,6 @@ public class bulkuxModSystem : ModSystem
 
     private static HashSet<ItemSlot> MoveAllMatching(IWorldAccessor world, ItemStack item, IInventory source, IInventory dest, int maxItems = -1)
     {
-        var totalMoved = 0;
         HashSet<ItemSlot> dirtySlots = new HashSet<ItemSlot>();
         List<ItemSlot> skipSlots = new List<ItemSlot>();
         foreach (var sourceSlot in source)
@@ -52,7 +69,7 @@ public class bulkuxModSystem : ModSystem
                 var wslot = dest.GetBestSuitedSlot(sourceSlot, null, skipSlots);
                 if (wslot.slot == null)
                 {
-                    api.Logger.Audit("no suitable slot found in destination");
+                    world.Api.Logger.Audit("no suitable slot found in destination");
                     return dirtySlots;
                 }
 
@@ -63,8 +80,6 @@ public class bulkuxModSystem : ModSystem
                     dirtySlots.Add(sourceSlot);
                 }
                 
-                totalMoved += moved;
-
                 skipSlots.Add(wslot.slot);
             }
         }
@@ -237,21 +252,29 @@ public class bulkuxModSystem : ModSystem
     [HarmonyPatch(typeof(BlockCrate), nameof(BlockCrate.GetPlacedBlockInteractionHelp))]
     public static void GetPlacedBlockInteractionHelp(ref WorldInteraction[] __result)
     {
-        __result = new WorldInteraction[]
+        // We want to filter out just the original world interactions for the crate; otherwise, 
+        // mods like CarryOn won't be able to display their interaction help
+        _crateInteractionsBuffer.Clear();
+        foreach (var wi in __result)
         {
-            new WorldInteraction()
+            if (wi.ActionLangCode == "blockhelp-crate-add" ||
+                wi.ActionLangCode == "blockhelp-crate-addall" ||
+                wi.ActionLangCode == "blockhelp-crate-remove" ||
+                wi.ActionLangCode == "blockhelp-crate-removeall")
             {
-                ActionLangCode = "bulkux:blockhelp-bulkux-get",
-                MouseButton = EnumMouseButton.Right,
-                HotKeyCodes = null
-            },
-            new WorldInteraction()
-            {
-                ActionLangCode = "bulkux:blockhelp-bulkux-put",
-                MouseButton = EnumMouseButton.Right,
-                HotKeyCode = "shift"
+                continue;
             }
-        };
+            
+            _crateInteractionsBuffer.Add(wi);
+        }
+        
+        // Finally, add our new interaction items
+        foreach (var wi in _newCrateInteractions)
+        {
+            _crateInteractionsBuffer.Add(wi);
+        }
+
+        __result = _crateInteractionsBuffer.ToArray();
     }
     
 }
